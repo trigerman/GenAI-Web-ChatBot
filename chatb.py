@@ -1,4 +1,4 @@
-﻿# worWebChatBot-2/worWebChatBot-2/chatb.py
+# worWebChatBot-2/worWebChatBot-2/chatb.py
 
 import openai
 from dotenv import load_dotenv
@@ -9,7 +9,7 @@ from collections import defaultdict, deque
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
-from db import save_chat_log, has_session_history, has_email_course_history
+from db import save_chat_log, has_session_history, has_email_course_history, get_chat_history
 import html
 import re
 
@@ -240,23 +240,37 @@ def get_chat_response(user_question, session_id, email, course="ist256"):
     syllabus_str = flatten_syllabus_text(syllabus) if syllabus else 'No syllabus information is available right now.'
     instruction_str = flatten_instruction_text(course_instruction)
 
+    if not conversation_buffers[session_id] and email:
+        db_history = get_chat_history(email, course)
+        if db_history:
+            for row in db_history[-MAX_HISTORY_TURNS:]:
+                conversation_buffers[session_id].append((row[0], row[1]))
+
     history_pairs = list(conversation_buffers[session_id])
     if history_pairs:
-        history_str = "\n\n" + "\n\n".join([f"Student: {u}\nTutor: {b}" for (u, b) in history_pairs])
+        history_str = "Prior Conversation History:\n" + "\n\n".join([f"Student: {u}\nTutor: {b}" for (u, b) in history_pairs])
     else:
-        history_str = ""
+        history_str = "No prior conversation history in this session."
 
     system_prompt = f"""
 You are a { 'HCDD 340 Tutor (Mobile Computing)' if course=='hcdd340' else 'Web Development Tutor for IST 256' }.
-STRICT SCOPE: Answer ONLY questions covered in this course's syllabus or foundational basics enabling those syllabus topics. If a question is outside scope, politely decline and suggest a related in-scope topic.
+Your primary role is to guide students through their questions related strictly to the course syllabus and foundational basics enabling those topics.
 
-Here is the course syllabus (for grounding):
+CRITICAL TUTORING RULES:
+1. DO NOT give direct answers or write out full solutions.
+2. Teach them instead: ask questions, reason with them, and make them think so they arrive at the answer themselves.
+3. Suggest specific steps for them to perform or concepts to review.
+4. STRICT SCOPE: If a question is outside the scope of the course syllabus (e.g., general knowledge unrelated to the class), politely decline and actively bring them back to the topic by suggesting a related in-scope topic they could ask about.
+
+Here is the course syllabus (for grounding context):
 {syllabus_str}
 
 Here are course policies/instructions:
 {instruction_str}
 
-Use short, clear explanations, include examples when helpful, and end with a brief follow-up question.
+{history_str}
+
+Remember your tutoring rules: Be helpful but Socratic. Guide, don't just solve.
 """.strip()
 
     chat_prompt = ChatPromptTemplate.from_messages([
@@ -297,7 +311,7 @@ Use short, clear explanations, include examples when helpful, and end with a bri
         conversation_context["last_bot_message"] = response
     else:
         response = (
-        "Iâ€™m focused on this courseâ€™s syllabus and foundational basics. "
+        "I'm focused on this course's syllabus and foundational basics. "
         "That question seems outside scope. Would you like to ask about a "
         "topic from the syllabus instead (e.g., one listed above)?"
     )
@@ -306,6 +320,10 @@ Use short, clear explanations, include examples when helpful, and end with a bri
     formatted = convert_code_blocks(response)
     formatted = format_explanation_text(formatted)
     save_chat_log(session_id, user_question, formatted, email, course)
+
+    # 5. Update session conversation buffer
+    conversation_buffers[session_id].append((user_question, response))
+
     return formatted
 
 

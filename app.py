@@ -1,6 +1,7 @@
 # worWebChatBot-2/worWebChatBot-2/app.py
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 import os
 import hashlib
@@ -9,7 +10,7 @@ from db import create_user_if_not_exists, save_chat_log, get_chat_history
 from chatb import get_chat_response
 
 app = Flask(__name__)
-app.secret_key = "your-secret-key"  # Replace with a secure key
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-fallback-secret-key-for-dev")
 
 # 1. Assign UUID session if it doesn't exist
 @app.before_request
@@ -44,7 +45,7 @@ def auth_page():
 def handle_auth():
     data = request.get_json()
     email = data["email"]
-    password = hashlib.sha256(data["password"].encode()).hexdigest()
+    raw_password = data["password"]
     action = data["action"]
 
     conn = mysql.connector.connect(
@@ -61,10 +62,14 @@ def handle_auth():
         cursor.execute("SELECT * FROM accounts WHERE email = %s", (email,))
         if cursor.fetchone():
             return jsonify(success=False, message="Account already exists.")
+        
+        # Use werkzeug for password hashing securely
+        password_hash = generate_password_hash(raw_password)
+        
         cursor.execute("""
             INSERT INTO accounts (email, password_hash, agreed_to_terms)
             VALUES (%s, %s, 1)
-        """, (email, password))
+        """, (email, password_hash))
         conn.commit()
         session["email"] = email
         session.pop("course", None)        # clear any previous course selection
@@ -72,9 +77,11 @@ def handle_auth():
 
     elif action == "login":
         cursor.execute("""
-            SELECT * FROM accounts WHERE email = %s AND password_hash = %s
-        """, (email, password))
-        if cursor.fetchone():
+            SELECT password_hash FROM accounts WHERE email = %s
+        """, (email,))
+        record = cursor.fetchone()
+        
+        if record and check_password_hash(record[0], raw_password):
             session["email"] = email
             session.pop("course", None)      # clear any previous course selection
             return jsonify(success=True, message="Login successful.")
