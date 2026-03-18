@@ -193,18 +193,15 @@ def get_user_progress(email, course, syllabus_keys):
         topic = row.get("topic_name")
         for category, subtopics in syllabus_keys.items():
             if topic == category or topic in subtopics:
-                # 5 interactions = 100% mastery per sub-topic
-                progress_map[category] += min(row.get("interaction_count", 1) * 20, 100)
+                # 1 discussion = 20% progress on the WHOLE category! Much more generous!
+                progress_map[category] += row.get("interaction_count", 0) * 20
                 break
                 
-    # Normalize the progress across all subtopics in a category
+    # Normalize the progress across all subtopics in a category (cap at 100)
     final_progress = {}
-    for category, subtopics in syllabus_keys.items():
-        total_possible = len(subtopics) * 100 if isinstance(subtopics, list) else 100
-        if total_possible == 0: total_possible = 100 
-        
+    for category in syllabus_keys.keys():
         current_score = progress_map[category]
-        percentage = min(int((current_score / total_possible) * 100), 100)
+        percentage = min(current_score, 100)
         final_progress[category] = percentage
         
     return final_progress

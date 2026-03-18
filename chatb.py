@@ -83,8 +83,10 @@ def convert_code_blocks(text):
     # Fenced code
     block_pattern = r"```(html|css|javascript)?\n(.*?)```"
     text_with_placeholders = re.sub(block_pattern, replace_block, text, flags=re.DOTALL)
-    # Escape remaining HTML
-    escaped = html.escape(text_with_placeholders)
+    
+    # Do NOT escape HTML so we can respect the LLM's <p> and <b> tags
+    escaped = text_with_placeholders
+    
     # Inline backticks
     escaped = re.sub(r'`([^`]+)`', r'<code>\1</code>', escaped)
     # Restore fenced blocks
