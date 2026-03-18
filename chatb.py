@@ -249,14 +249,9 @@ def extract_week_number(text):
     return f"week {m.group(1)}" if m else None
 
 def is_query_allowed(query, course, session_id, email):
-    if is_general_response(query):
-        return True
-    if conversation_buffers.get(session_id) or has_session_history(session_id) or has_email_course_history(email, course):
-        return True
-    q_terms = _tokenize(query)
-    allowed = get_allowed_terms(course)
-    overlap = q_terms & allowed
-    return len(overlap) > 0
+    # Let the LLM handle all scope policing based on context and conversational history
+    # The system prompt strictly tells it to decline out of scope questions.
+    return True
 
 # Main chat responder, now accepts `course`
 def get_chat_response(user_question, session_id, email, course="ist256"):
@@ -335,15 +330,10 @@ Remember your tutoring rules: Be helpful but Socratic. Guide, don't just solve.
         prompt = f"Here are the course instructions:\n{json.dumps(course_instruction, indent=2)}\n\nStudent: {user_question}"
         response = chain.invoke({"question": prompt})
         conversation_context["last_bot_message"] = response
-    elif is_query_allowed(user_question, course, session_id, email):
+    else:
+        # Pass to the LLM and let its system prompt (Rule 4) determine scope
         response = chain.invoke({"question": user_question})
         conversation_context["last_bot_message"] = response
-    else:
-        response = (
-        "I'm focused on this course's syllabus and foundational basics. "
-        "That question seems outside scope. Would you like to ask about a "
-        "topic from the syllabus instead (e.g., one listed above)?"
-    )
 
     # 4. Format & log
     formatted = convert_code_blocks(response)
