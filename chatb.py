@@ -304,10 +304,10 @@ You MUST output your ENTIRE response as a raw JSON object with absolutely no mar
 2. "topics_covered": An array of strings containing the EXACT names of the syllabus topics (from the provided syllabus context) that were discussed or taught in this turn. If none, return an empty array.
 
 Example format:
-{{
+{{{{
   "response": "Let me help you with CSS Selectors...",
   "topics_covered": ["Selectors", "CSS"]
-}}
+}}}}
 """.strip()
 
     chat_prompt = ChatPromptTemplate.from_messages([
