@@ -26,17 +26,48 @@ def format_code_response(code, language="html"):
 
 # Convert markdown-style lists and headings into HTML
 def format_explanation_text(text):
-    # Numbered lists
-    text = re.sub(r'(?<!\d)(\d+)\.\s+(.*)', r'<li>\2</li>', text)
-    if "<li>" in text and not text.strip().startswith("<ol>"):
-        text = f"<ol>{text}</ol>"
-    # Bulleted lists
-    text = re.sub(r'-\s+(.*)', r'<li>\1</li>', text)
-    if "<li>" in text and "<ul>" not in text:
-        text = f"<ul>{text}</ul>"
     # Headings
-    text = re.sub(r'###\s+(.*)', r'<h3>\1</h3>', text)
-    return text
+    text = re.sub(r'(?m)^###\s+(.*)', r'<h3>\1</h3>', text)
+    text = re.sub(r'(?m)^##\s+(.*)', r'<h2>\1</h2>', text)
+    text = re.sub(r'(?m)^#\s+(.*)', r'<h1>\1</h1>', text)
+    
+    # Process lists safely, line by line
+    lines = text.split('\n')
+    out = []
+    in_ul = False
+    in_ol = False
+    
+    for line in lines:
+        stripped = line.strip()
+        if re.match(r'^\d+\.\s+', stripped):
+            if in_ul: 
+                out.append('</ul>')
+                in_ul = False
+            if not in_ol: 
+                out.append('<ol>')
+                in_ol = True
+            out.append(re.sub(r'^\d+\.\s+(.*)', r'<li>\1</li>', stripped))
+        elif re.match(r'^-\s+', stripped):
+            if in_ol: 
+                out.append('</ol>')
+                in_ol = False
+            if not in_ul: 
+                out.append('<ul>')
+                in_ul = True
+            out.append(re.sub(r'^-\s+(.*)', r'<li>\1</li>', stripped))
+        else:
+            if in_ol: 
+                out.append('</ol>')
+                in_ol = False
+            if in_ul: 
+                out.append('</ul>')
+                in_ul = False
+            out.append(line)
+            
+    if in_ol: out.append('</ol>')
+    if in_ul: out.append('</ul>')
+    
+    return '\n'.join(out)
 
 # Handle fenced code blocks and inline code
 def convert_code_blocks(text):
@@ -291,9 +322,7 @@ Remember your tutoring rules: Be helpful but Socratic. Guide, don't just solve.
                 break
 
     # 3. Route the question
-    if is_general_response(q_lower):
-        response = "Got it! What would you like to learn next?"
-    elif matched:
+    if matched:
         prompt = f"You asked about {matched}. Here is the assignment:\n{group_projects[matched]}\n\nStudent: {user_question}"
         response = chain.invoke({"question": prompt})
         conversation_context["last_bot_message"] = response
