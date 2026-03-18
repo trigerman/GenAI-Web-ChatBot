@@ -315,10 +315,16 @@ You’re invited to test IST256 Chatbot, an AI-powered chatbot designed to assis
     window.addEventListener('resize', setVhUnit);
 
     // Terms modal logic
+    if (localStorage.getItem("termsAccepted") === "true") {
+      $("#termsModal").hide();
+      $(".chat-container").show();
+    }
+
     $("#agreeCheckbox").change(function(){
       $("#acceptTermsBtn").prop("disabled", !this.checked);
     });
     $("#acceptTermsBtn").click(function(){
+      localStorage.setItem("termsAccepted", "true");
       $("#termsModal").hide();
       $(".chat-container").show();
     });
