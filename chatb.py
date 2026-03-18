@@ -300,7 +300,7 @@ Remember your tutoring rules: Be helpful but Socratic. Guide, don't just solve.
 
 CRITICAL JSON OUTPUT RULE:
 You MUST output your ENTIRE response as a raw JSON object with absolutely no markdown code blocks around it. The JSON must have two keys:
-1. "response": Your actual chat reply to the user (formatted in HTML/Markdown as requested).
+1. "response": Your actual chat reply to the user (formatted strictly in HTML tags like <b>, <ul>, <p>, <br>. DO NOT use Markdown asterisks).
 2. "topics_covered": An array of strings containing the EXACT names of the syllabus topics (from the provided syllabus context) that were discussed or taught in this turn. If none, return an empty array.
 
 Example format:
@@ -371,6 +371,9 @@ Example format:
         # If the model fails to output valid JSON or misses the schema, just use the raw text
         chat_text = response
         print(f"Failed to parse LLM JSON: {e}")
+        
+    # Fallback to convert any rogue markdown ** to HTML bold tags
+    chat_text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', chat_text)
         
     conversation_context["last_bot_message"] = chat_text
 

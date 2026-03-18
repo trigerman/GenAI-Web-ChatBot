@@ -394,23 +394,22 @@ You’re invited to test IST256 Chatbot, an AI-powered chatbot designed to assis
         progressChartInstance.destroy();
       }
       progressChartInstance = new Chart(ctx, {
-        type: 'radar',
+        type: 'bar',
         data: {
           labels: labels,
           datasets: [{
             label: 'Skill Progress %',
             data: dataArr,
-            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
             borderColor: 'rgba(54, 162, 235, 1)',
-            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1
           }]
         },
         options: {
+          indexAxis: 'y',
           scales: {
-            r: {
-              angleLines: { display: false },
-              suggestedMin: 0,
+            x: {
+              beginAtZero: true,
               suggestedMax: 100
             }
           }
