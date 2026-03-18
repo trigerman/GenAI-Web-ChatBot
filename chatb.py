@@ -328,27 +328,30 @@ Example format:
                 break
 
     # 4. Parse the JSON response
-    # The LLM is instructed to return raw JSON. If it includes backticks, strip them.
-    raw_response = response.strip()
-    if raw_response.startswith("```json"):
-        raw_response = raw_response[7:-3].strip()
-    elif raw_response.startswith("```"):
-        raw_response = raw_response[3:-3].strip()
-        
     chat_text = response # fallback
     topics_covered = []
     
     try:
+        # Extract JSON block using regex if wrapped in backticks
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+        if json_match:
+            raw_response = json_match.group(1)
+        else:
+            raw_response = response.strip()
+            
         parsed_json = json.loads(raw_response)
-        chat_text = parsed_json.get("response", response)
-        topics_covered = parsed_json.get("topics_covered", [])
         
-        # Record the progress to the database
-        if topics_covered and email:
-            record_topic_progress(email, course, topics_covered)
-    except json.JSONDecodeError:
-        # If the model fails to output valid JSON, just use the raw text
+        if isinstance(parsed_json, dict):
+            chat_text = parsed_json.get("response", response)
+            topics_covered = parsed_json.get("topics_covered", [])
+            
+            # Record the progress to the database
+            if topics_covered and email:
+                record_topic_progress(email, course, topics_covered)
+    except Exception as e:
+        # If the model fails to output valid JSON or misses the schema, just use the raw text
         chat_text = response
+        print(f"Failed to parse LLM JSON: {e}")
         
     conversation_context["last_bot_message"] = chat_text
 
