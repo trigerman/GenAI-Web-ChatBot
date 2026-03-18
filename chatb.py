@@ -327,6 +327,25 @@ Example format:
                 matched = key
                 break
 
+    # 3. Route the question
+    if matched:
+        prompt = f"You asked about {matched}. Here is the assignment:\n{group_projects[matched]}\n\nStudent: {user_question}"
+        response = chain.invoke({"question": prompt})
+        conversation_context["last_bot_message"] = response
+    elif any(kw in q_lower for kw in GROUP_PROJECT_KEYWORDS):
+        all_proj = "\n\n".join(f"{k}:\n{v}" for k, v in group_projects.items())
+        prompt = f"Here are all group projects:\n{all_proj}\n\nStudent: {user_question}"
+        response = chain.invoke({"question": prompt})
+        conversation_context["last_bot_message"] = response
+    elif any(kw in q_lower for kw in COURSE_INSTRUCTION_KEYWORDS):
+        prompt = f"Here are the course instructions:\n{json.dumps(course_instruction, indent=2)}\n\nStudent: {user_question}"
+        response = chain.invoke({"question": prompt})
+        conversation_context["last_bot_message"] = response
+    else:
+        # Pass to the LLM and let its system prompt (Rule 4) determine scope
+        response = chain.invoke({"question": user_question})
+        conversation_context["last_bot_message"] = response
+
     # 4. Parse the JSON response
     chat_text = response # fallback
     topics_covered = []
