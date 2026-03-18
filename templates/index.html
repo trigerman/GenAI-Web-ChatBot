@@ -10,6 +10,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-html.min.js"></script>
 
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <!-- Bootstrap & jQuery -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -128,6 +131,25 @@
       white-space: pre-wrap; overflow-x: auto;
       line-height: 1.5;
     }
+
+    /* Progress Panel */
+    .progress-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      padding: 15px;
+      z-index: 999;
+      display: none; /* Toggled via button */
+    }
+    .progress-panel .btn-close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+    }
   </style>
 </head>
 <body>
@@ -221,6 +243,13 @@ You’re invited to test IST256 Chatbot, an AI-powered chatbot designed to assis
       >
         Chatbot Overview
       </button>
+      <button
+        id="progressBtn"
+        class="btn btn-info text-white me-2"
+        onclick="$('#progressPanel').fadeToggle()"
+      >
+        📊 View Progress
+      </button>
       <a
         href="https://pennstate.qualtrics.com/jfe/form/SV_42bt4cM0ZIRwado"
         class="btn btn-primary"
@@ -264,6 +293,13 @@ You’re invited to test IST256 Chatbot, an AI-powered chatbot designed to assis
         <li><strong>Follow Up:</strong> Ask more if you need details.</li>
       </ul>
     </div>
+  </div>
+
+  <!-- Progress Chart Panel -->
+  <div id="progressPanel" class="progress-panel">
+    <button type="button" class="btn-close" onclick="$('#progressPanel').fadeOut()"></button>
+    <h5 class="text-center mb-3">📈 Skill Mastery</h5>
+    <canvas id="progressChart"></canvas>
   </div>
 
   <script>
@@ -332,9 +368,60 @@ You’re invited to test IST256 Chatbot, an AI-powered chatbot designed to assis
           $(".typing-indicator").before(botHtml);
           Prism.highlightAll();
           scrollToBottom();
+          fetchAndRenderProgress(); // Update chart based on what was learned
         }
       });
     }
+
+    // Chart.js Setup
+    let progressChartInstance = null;
+    function renderChart(labels, dataArr) {
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      if (progressChartInstance) {
+        progressChartInstance.destroy();
+      }
+      progressChartInstance = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Skill Progress %',
+            data: dataArr,
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            r: {
+              angleLines: { display: false },
+              suggestedMin: 0,
+              suggestedMax: 100
+            }
+          }
+        }
+      });
+    }
+
+    function fetchAndRenderProgress() {
+      if (!userEmail) return;
+      $.ajax({
+        type: "GET",
+        url: "/progress",
+        success: function(res) {
+          if (res.success && res.progress) {
+            const labels = Object.keys(res.progress);
+            const dataArr = Object.values(res.progress);
+            renderChart(labels, dataArr);
+          }
+        }
+      });
+    }
+
+    // Initialize chart
+    fetchAndRenderProgress();
 
     $("#send").click(sendMessage);
     $("#userInput").keypress(function(e){

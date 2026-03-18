@@ -18,6 +18,19 @@ def create_user_if_not_exists(email):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT IGNORE INTO users (email) VALUES (%s)", (email,))
+    
+    # Also ensure user_progress table exists
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_progress (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            course VARCHAR(32) NOT NULL,
+            topic_name VARCHAR(255) NOT NULL,
+            interaction_count INT DEFAULT 1,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_user_course_topic (email, course, topic_name)
+        )
+    """)
     conn.commit()
     cursor.close()
     conn.close()
@@ -111,4 +124,75 @@ def has_email_course_history(email, course=None):
     conn.close()
     return bool(row)
 
+def record_topic_progress(email, course, topics_list):
+    if not email or not topics_list:
+        return
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    course_value = (course or 'ist256').lower()
+    
+    for topic in topics_list:
+        if not topic: continue
+        cursor.execute("""
+            INSERT INTO user_progress (email, course, topic_name, interaction_count)
+            VALUES (%s, %s, %s, 1)
+            ON DUPLICATE KEY UPDATE 
+                interaction_count = interaction_count + 1,
+                last_updated = CURRENT_TIMESTAMP
+        """, (email, course_value, str(topic)))
+        
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_user_progress(email, course, syllabus_keys):
+    if not email or not syllabus_keys:
+        return {}
+        
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    course_value = (course or 'ist256').lower()
+    
+    # Query to fetch progress specifically for this user/course
+    try:
+        cursor.execute("""
+            SELECT topic_name, interaction_count 
+            FROM user_progress 
+            WHERE email = %s AND course = %s
+        """, (email, course_value))
+        rows = cursor.fetchall()
+    except mysql.connector.Error as exc:
+        if getattr(exc, "errno", None) == errorcode.ER_NO_SUCH_TABLE:
+            rows = []
+        else:
+            cursor.close()
+            conn.close()
+            raise
+            
+    cursor.close()
+    conn.close()
+    
+    # Map the database hits to the provided top-level syllabus categories
+    progress_map = {key: 0 for key in syllabus_keys}
+    
+    for row in rows:
+        topic = row.get("topic_name")
+        for category, subtopics in syllabus_keys.items():
+            if topic == category or topic in subtopics:
+                # 5 interactions = 100% mastery per sub-topic
+                progress_map[category] += min(row.get("interaction_count", 1) * 20, 100)
+                break
+                
+    # Normalize the progress across all subtopics in a category
+    final_progress = {}
+    for category, subtopics in syllabus_keys.items():
+        total_possible = len(subtopics) * 100 if isinstance(subtopics, list) else 100
+        if total_possible == 0: total_possible = 100 
+        
+        current_score = progress_map[category]
+        percentage = min(int((current_score / total_possible) * 100), 100)
+        final_progress[category] = percentage
+        
+    return final_progress
 

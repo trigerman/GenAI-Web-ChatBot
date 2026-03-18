@@ -6,8 +6,8 @@ import uuid
 import os
 import hashlib
 import mysql.connector
-from db import create_user_if_not_exists, save_chat_log, get_chat_history
-from chatb import get_chat_response
+from db import create_user_if_not_exists, save_chat_log, get_chat_history, get_user_progress
+from chatb import get_chat_response, load_syllabus
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-fallback-secret-key-for-dev")
@@ -143,7 +143,27 @@ def chat():
     bot_response = get_chat_response(user_message, session_id, email, course)
     return jsonify({"response": bot_response})
 
-# 10. Start server with a styled banner
+# 10. Progress Tracker Endpoint
+@app.route("/progress", methods=["GET"])
+def progress():
+    email = session.get("email")
+    course = session.get("course", "ist256")
+    
+    if not email:
+        return jsonify(success=False)
+        
+    syllabus_file = "hcdd340_syllabus.json" if course == "hcdd340" else "syllabus.json"
+    try:
+        syllabus = load_syllabus(syllabus_file)
+    except Exception:
+        syllabus = {}
+        
+    categories = syllabus.get("weekly_schedule", syllabus) if course == "hcdd340" else syllabus
+    
+    progress_data = get_user_progress(email, course, categories)
+    return jsonify(success=True, progress=progress_data)
+
+# 11. Start server with a styled banner
 if __name__ == "__main__":
     print("\033[1;31m\n🔥 Flask Web UI running at: http://127.0.0.1:5000/auth\033[0m")
     app.run(debug=True, use_reloader=False)

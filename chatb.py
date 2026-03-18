@@ -9,7 +9,7 @@ from collections import defaultdict, deque
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
-from db import save_chat_log, has_session_history, has_email_course_history, get_chat_history
+from db import save_chat_log, has_session_history, has_email_course_history, get_chat_history, record_topic_progress
 import html
 import re
 
@@ -297,6 +297,17 @@ Here are course policies/instructions:
 {history_str}
 
 Remember your tutoring rules: Be helpful but Socratic. Guide, don't just solve.
+
+CRITICAL JSON OUTPUT RULE:
+You MUST output your ENTIRE response as a raw JSON object with absolutely no markdown code blocks around it. The JSON must have two keys:
+1. "response": Your actual chat reply to the user (formatted in HTML/Markdown as requested).
+2. "topics_covered": An array of strings containing the EXACT names of the syllabus topics (from the provided syllabus context) that were discussed or taught in this turn. If none, return an empty array.
+
+Example format:
+{
+  "response": "Let me help you with CSS Selectors...",
+  "topics_covered": ["Selectors", "CSS"]
+}
 """.strip()
 
     chat_prompt = ChatPromptTemplate.from_messages([
@@ -316,32 +327,38 @@ Remember your tutoring rules: Be helpful but Socratic. Guide, don't just solve.
                 matched = key
                 break
 
-    # 3. Route the question
-    if matched:
-        prompt = f"You asked about {matched}. Here is the assignment:\n{group_projects[matched]}\n\nStudent: {user_question}"
-        response = chain.invoke({"question": prompt})
-        conversation_context["last_bot_message"] = response
-    elif any(kw in q_lower for kw in GROUP_PROJECT_KEYWORDS):
-        all_proj = "\n\n".join(f"{k}:\n{v}" for k, v in group_projects.items())
-        prompt = f"Here are all group projects:\n{all_proj}\n\nStudent: {user_question}"
-        response = chain.invoke({"question": prompt})
-        conversation_context["last_bot_message"] = response
-    elif any(kw in q_lower for kw in COURSE_INSTRUCTION_KEYWORDS):
-        prompt = f"Here are the course instructions:\n{json.dumps(course_instruction, indent=2)}\n\nStudent: {user_question}"
-        response = chain.invoke({"question": prompt})
-        conversation_context["last_bot_message"] = response
-    else:
-        # Pass to the LLM and let its system prompt (Rule 4) determine scope
-        response = chain.invoke({"question": user_question})
-        conversation_context["last_bot_message"] = response
+    # 4. Parse the JSON response
+    # The LLM is instructed to return raw JSON. If it includes backticks, strip them.
+    raw_response = response.strip()
+    if raw_response.startswith("```json"):
+        raw_response = raw_response[7:-3].strip()
+    elif raw_response.startswith("```"):
+        raw_response = raw_response[3:-3].strip()
+        
+    chat_text = response # fallback
+    topics_covered = []
+    
+    try:
+        parsed_json = json.loads(raw_response)
+        chat_text = parsed_json.get("response", response)
+        topics_covered = parsed_json.get("topics_covered", [])
+        
+        # Record the progress to the database
+        if topics_covered and email:
+            record_topic_progress(email, course, topics_covered)
+    except json.JSONDecodeError:
+        # If the model fails to output valid JSON, just use the raw text
+        chat_text = response
+        
+    conversation_context["last_bot_message"] = chat_text
 
-    # 4. Format & log
-    formatted = convert_code_blocks(response)
+    # 5. Format & log
+    formatted = convert_code_blocks(chat_text)
     formatted = format_explanation_text(formatted)
     save_chat_log(session_id, user_question, formatted, email, course)
 
-    # 5. Update session conversation buffer
-    conversation_buffers[session_id].append((user_question, response))
+    # 6. Update session conversation buffer
+    conversation_buffers[session_id].append((user_question, chat_text))
 
     return formatted
 
