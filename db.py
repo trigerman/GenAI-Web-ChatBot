@@ -132,6 +132,19 @@ def record_topic_progress(email, course, topics_list):
     cursor = conn.cursor()
     course_value = (course or 'ist256').lower()
     
+    # Ensure table exists before trying to insert
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_progress (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            course VARCHAR(32) NOT NULL,
+            topic_name VARCHAR(255) NOT NULL,
+            interaction_count INT DEFAULT 1,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_user_course_topic (email, course, topic_name)
+        )
+    """)
+    
     for topic in topics_list:
         if not topic: continue
         cursor.execute("""

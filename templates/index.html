@@ -363,12 +363,19 @@ You’re invited to test IST256 Chatbot, an AI-powered chatbot designed to assis
         contentType: "application/json",
         success: function(data){
           $(".typing-indicator").hide();
-          const reply = data.response;
+          const reply = data.response || "Sorry, I received an empty response.";
           const botHtml = `<div class="message bot-message">${reply}<div class="timestamp">${time}</div></div>`;
           $(".typing-indicator").before(botHtml);
           Prism.highlightAll();
           scrollToBottom();
           fetchAndRenderProgress(); // Update chart based on what was learned
+        },
+        error: function(xhr, status, error) {
+          $(".typing-indicator").hide();
+          const botHtml = `<div class="message bot-message" style="color: red;">Error: Failed to get response from server.<div class="timestamp">${time}</div></div>`;
+          $(".typing-indicator").before(botHtml);
+          scrollToBottom();
+          console.error("Chat error:", error, xhr.responseText);
         }
       });
     }
